@@ -11,6 +11,7 @@ screenshots and a video per run, and one film that shows the step list with PASS
 Templates (copy into the project, e.g. `internal/documented-testing/`):
 - `templates/lib.mjs` — recorder (`session`, `step`, `expect`, `close`).
 - `templates/example-login.mjs` — smallest example run.
+- `templates/example-todomvc.mjs` — runnable public-demo example with two `section()`s.
 - `templates/film/` — HyperFrames film builder (`build.mjs`).
 
 ## Hard rules
