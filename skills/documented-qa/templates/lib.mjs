@@ -39,6 +39,7 @@ export async function session(name, { video = true, storage } = {}) {
   await ctx.addInitScript(OVERLAY);
   const page = await ctx.newPage();
   const log = [];
+  let sec; // current test case/step; the film starts a new slide when it changes
   let n = 0;
   const t0 = Date.now();
   const stamp = () => new Date(Date.now() - t0).toISOString().slice(14, 19);
@@ -55,7 +56,7 @@ export async function session(name, { video = true, storage } = {}) {
     await page.waitForTimeout(hold);
     const file = shot ? path.join('shots', name, `${String(n).padStart(2, '0')}.png`) : null;
     if (file) { fs.mkdirSync(path.join(ROOT, 'shots', name), { recursive: true }); await page.screenshot({ path: path.join(ROOT, file) }); }
-    log.push({ n, at: stamp(), caption, shot: file });
+    log.push({ n, at: stamp(), caption, shot: file, section: sec });
     if (action) await action(locator?.first());
     await page.evaluate(() => window.__hlClear?.()).catch(() => {});
   }
@@ -75,5 +76,6 @@ export async function session(name, { video = true, storage } = {}) {
     fs.writeFileSync(path.join(ROOT, 'raw', `${name}.json`), JSON.stringify({ name, raw, log }, null, 2));
     return { raw, log };
   }
-  return { page, ctx, step, expect, close };
+  const section = (name) => { sec = name; };
+  return { page, ctx, step, expect, section, close };
 }

@@ -45,6 +45,7 @@ Templates (copy into the project, e.g. `internal/documented-testing/`):
 Env: `QA_APP_URL` (exported as `APP`), optional `QA_GATE_USER`/`QA_GATE_PW` for an HTTP basic-auth gate, `HEADED=1`.
 
 - `session(name, {video=true, storage})` → `{page, ctx, step, expect, close}`. Chromium 1440×900, video to `raw/<name>/`, overlay via `addInitScript` (survives navigation).
+- `section(name)` — call when the run moves to a different test case or step (e.g. `section('Case 3 · Checkout')`). Following steps log `section: name`; the film gives each section its own card and a fresh step list.
 - `step(caption, locator?, action?, {hold=1400, shot=true})` — red box + caption bar "N. caption", screenshot, log `{n, at:'mm:ss', caption, shot}`, then the action.
 - `expect(caption, locator, {timeout=20000, label})` — visible → `PASS - …`, else `FAIL - …` (or `label`, e.g. FOUND); sets `result`; returns bool.
 - `close()` — saves the video, writes `raw/<name>.json` `{name, raw, log}`. A run killed before `close()` has no log: rebuild it from screenshot mtimes.
@@ -59,7 +60,9 @@ node build.mjs "<title>" "<run>=<heading>" ["<run>=<heading>" ...]   # reads ../
 npx --yes hyperframes@0.8.186 check
 npx --yes hyperframes@0.8.186 render -o ../videos/<name>.mp4         # minutes; run in background
 ```
-One scene per run: 4 s title card (heading, "N steps · X pass · Y fail"), left 600 px step rail (current step lit, PASS/FAIL/FOUND chips, smaller font above 12 steps), recording on the right. Each step plays ≤9 s; longer waits get a "⏩ N skipped" chip. Needs `ffmpeg`/`ffprobe`. Raw webms are machine-local: render where you recorded, or copy `raw/` and fix the `raw` path in each JSON.
+One scene per run: 4 s title card (heading, "N steps · X pass · Y fail"), left 600 px step rail (one slide per `section()`, with a 2.5 s section card between; current step lit and scrolled into the upper third when the list overflows, PASS/FAIL/FOUND chips, smaller font above 12 steps), recording on the right. Each step plays ≤9 s; longer waits get a "⏩ N skipped" chip. Needs `ffmpeg`/`ffprobe`. Raw webms are machine-local: render where you recorded, or copy `raw/` and fix the `raw` path in each JSON.
+
+Report the real state per test step. A fault in the recording script is not a product FAIL: give the log step `result: "script"` and a `note` (shown under the step in the film). Mark a step `partial` when only part of its expected result was checked. `SUMMARY=<json> node build.mjs …` appends a closing table, one row per sheet step `{case, step, expected, actual, result}`.
 
 ## General traps
 
