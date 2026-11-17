@@ -2,6 +2,8 @@
 
 An agent skill that turns test-sheet cases into **recorded evidence**: Playwright runs with a red box on each element acted on, numbered captions, PASS/FAIL checks, a screenshot per step and a video per run, then one film (made with [HyperFrames](https://hyperframes.heygen.com)) that shows the step list beside each recording. It also covers the delivery: run logs in a PR, a results comment, the video upload and a handoff note.
 
+A second mode, **tutorial**, uses the same recorder for a client or user walkthrough: plain captions, an explanation box under the recording, no PASS/FAIL, and a step-by-step PDF guide built from the same run.
+
 ```bash
 npx skills add vincentfranstyo/documented-qa-skill
 ```
@@ -48,6 +50,18 @@ The film: step list on the left with the current step lit and PASS chips, record
 
 ![Example film frames: Case 1 step list, Case 2 section card, Case 2 step list](docs/example-film.jpg)
 
+## Tutorial mode
+
+```bash
+cp $T/example-tutorial.mjs $T/guide.mjs qa/scripts/
+cd qa/scripts && MODE=tutorial node example-tutorial.mjs
+cd ../film && MODE=tutorial node build.mjs "Example · tutorial" "G1-todomvc=Using the task list"
+npx --yes hyperframes@0.8.186 render -o ../videos/tutorial.mp4
+cd ../scripts && node guide.mjs "Using the task list" G1-todomvc   # → qa/guides/G1-todomvc.pdf
+```
+
+Each `step()` takes `{ explain, todo }`: `explain` is shown under the recording, `todo` is the reader instruction in the PDF. When the explanation needs longer to read than the clip, the film holds the clip's last frame. Rules and workflow: `skills/documented-qa/references/tutorial.md`.
+
 ## Prerequisites
 
 | tool | used for | check |
@@ -64,6 +78,9 @@ The film: step list on the left with the current step lit and PASS chips, record
 - `skills/documented-qa/templates/lib.mjs`: the recorder
 - `skills/documented-qa/templates/example-login.mjs`: a minimal sign-in run
 - `skills/documented-qa/templates/example-todomvc.mjs`: the runnable example above
+- `skills/documented-qa/templates/example-tutorial.mjs`: tutorial-mode example
+- `skills/documented-qa/templates/guide.mjs`: PDF guide from a run
+- `skills/documented-qa/references/tutorial.md`: tutorial-mode rules and workflow
 - `skills/documented-qa/templates/film/`: the film builder
 
 ## Safety defaults

@@ -2,7 +2,9 @@
 // One scene per run: a step rail on the left (the current step lit), the recording on the right; a run
 // with several log sections (recorder section()) gets a card and a fresh rail per section,
 // long waits cut out with a "skipped" marker. Usage: node build.mjs <title> <run> [<run> ...]
-// ponytail: timings come from the log's mm:ss stamps (1 s resolution); fine for doc cuts.
+// MODE=tutorial: no PASS/FAIL chips, an explanation box under the recording (log `explain`), and when the
+// text needs longer to read than the clip, the clip's own last frame holds (never the pre-action screenshot).
+// Timings use the log's exact `t` seconds; older logs fall back to mm:ss stamps (1 s resolution).
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -19,6 +21,8 @@ const MAX_HOLD = 9;    // longest stretch shown after a step before cutting ahea
 const LEAD = 0.6;      // show a little before each step's caption appears
 const TITLE = 4;       // seconds for each run's title card
 const CARD = 2.5;      // seconds for a section card (new test case / step inside one run)
+const TUTORIAL = process.env.MODE === 'tutorial';
+const readTime = (st) => (TUTORIAL && st.explain ? Math.min(11, Math.max(3.5, st.explain.length / 15 + st.caption.length / 25)) : 0);
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const secs = (at) => { const [m, s] = at.split(':').map(Number); return m * 60 + s; };
 const fmt = (s) => (s >= 60 ? `${Math.floor(s / 60)} min ${Math.round(s % 60)} s` : `${Math.round(s)} s`);
@@ -41,7 +45,7 @@ for (const run of runs) {
   const dur = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', mp4]).toString());
 
   // Cut list: from each step, play until the next step or MAX_HOLD, whichever is first.
-  const steps = log.log.map((x) => ({ ...x, t: secs(x.at) }));
+  const steps = log.log.map((x) => ({ ...x, t: x.t ?? secs(x.at) }));
   const segs = [];
   steps.forEach((st, i) => {
     const from = Math.max(0, st.t - LEAD);
@@ -72,22 +76,32 @@ for (const run of runs) {
       t += CARD;
       pages[pg].start = t;
     }
-    const len = sg.to - sg.from;
-    clips.push(`    <video id="${id}-v${k}" class="clip rec" src="assets/${run}.mp4" muted playsinline data-start="${t.toFixed(2)}" data-duration="${len.toFixed(2)}" data-media-start="${sg.from.toFixed(2)}" data-track-index="1"></video>`);
+    const play = sg.to - sg.from;
+    const st = steps[sg.step];
+    const len = Math.max(play, readTime(st));
+    clips.push(`    <video id="${id}-v${k}" class="clip rec${TUTORIAL ? ' tut' : ''}" src="assets/${run}.mp4" muted playsinline data-start="${t.toFixed(2)}" data-duration="${play.toFixed(2)}" data-media-start="${sg.from.toFixed(2)}" data-track-index="1"></video>`);
+    if (len > play) {
+      // Hold the clip's own last frame: the step screenshot is taken BEFORE the action.
+      const img = `${run}-hold${k}.png`;
+      execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-ss', Math.max(0, sg.to - 0.05).toFixed(3), '-i', mp4, '-frames:v', '1', path.join(HERE, 'assets', img)]);
+      clips.push(`    <img id="${id}-h${k}" class="clip rec${TUTORIAL ? ' tut' : ''}" src="assets/${img}" data-start="${(t + play).toFixed(2)}" data-duration="${(len - play).toFixed(2)}" data-track-index="1" />`);
+    }
+    if (TUTORIAL && st.explain) clips.push(`    <div id="${id}-x${k}" class="clip explain" data-start="${t.toFixed(2)}" data-duration="${len.toFixed(2)}" data-track-index="3"><div class="what">${esc(st.caption)}</div><div class="why">${esc(st.explain)}</div></div>`);
     lit.push({ step: sg.step, start: t, len });
-    if (sg.skipped) clips.push(`    <div id="${id}-skip${k}" class="clip skip" data-start="${(t + len - 1.6).toFixed(2)}" data-duration="1.6" data-track-index="2"><span>⏩ ${fmt(sg.skipped)} skipped</span></div>`);
+    if (sg.skipped && !TUTORIAL) clips.push(`    <div id="${id}-skip${k}" class="clip skip" data-start="${(t + len - 1.6).toFixed(2)}" data-duration="1.6" data-track-index="2"><span>⏩ ${fmt(sg.skipped)} skipped</span></div>`);
     t += len;
   }
   const total = t + 1.5;
   pages[pg].end = total;
 
   const li = steps.map((st, i) => {
-    const res = st.result ? `<b class="res ${st.result}" data-layout-ignore>${esc(st.result.toUpperCase())}</b>` : '';
+    const res = st.result && !TUTORIAL ? `<b class="res ${st.result}" data-layout-ignore>${esc(st.result.toUpperCase())}</b>` : '';
     const cap = esc(st.caption.replace(/^(PASS|FAIL|FOUND) - /, ''));
     const note = st.note ? `<small class="note">${esc(st.note)}</small>` : '';
     return `      <li id="${id}-s${i}"><span class="n">${i + 1}</span><span class="cap">${cap}${note}</span>${res}</li>`;
   });
   const tally = (ss) => {
+    if (TUTORIAL) return `${ss.length} steps`;
     const n = (r) => ss.filter((s) => s.result === r).length;
     return `${ss.length} steps · ${n('pass')} pass · ${n('fail')} fail${n('script') ? ` · ${n('script')} script error (not the product)` : ''}`;
   };
@@ -131,6 +145,10 @@ ${p.steps.map((i) => li[i]).join('\n')}
     #root .rail .note { display: block; font-size: 15px; line-height: 1.3; margin-top: 3px; color: #B45309; font-weight: 600; }
     #root .rail li.on .note { color: #FDE68A; }
     #root .rec { position: absolute; left: 624px; top: 60px; width: 1272px; height: 795px; object-fit: contain; border-radius: 12px; box-shadow: 0 6px 24px rgba(15,23,42,.18); }
+    #root .rec.tut { top: 36px; height: 780px; }
+    #root .explain { position: absolute; left: 624px; top: 836px; width: 1272px; height: 220px; padding: 16px 26px; background: #fff; border: 2px solid #E2E8F0; border-radius: 12px; z-index: 4; }
+    #root .explain .what { font-size: 30px; font-weight: 700; line-height: 1.2; }
+    #root .explain .why { font-size: 25px; line-height: 1.35; margin-top: 8px; color: #334155; }
     #root .skip { position: absolute; left: 624px; top: 900px; width: 1272px; display: flex; justify-content: center; z-index: 4; }
     #root .skip span { font-size: 28px; font-weight: 600; color: #1A2130; background: #F1F5F9; padding: 10px 22px; border-radius: 10px; }
   </style>

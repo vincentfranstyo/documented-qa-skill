@@ -6,6 +6,9 @@ import path from 'node:path';
 
 export const ROOT = path.resolve(import.meta.dirname, '..');
 export const APP = process.env.QA_APP_URL ?? 'https://staging.example.com';
+// MODE=tutorial: client walkthrough. Checks carry no PASS/FAIL text and a failed check stops the run
+// (a tutorial must never show a broken flow).
+const TUTORIAL = process.env.MODE === 'tutorial';
 
 const gate = process.env.QA_GATE_PW ? { username: process.env.QA_GATE_USER ?? '', password: process.env.QA_GATE_PW } : undefined;
 
@@ -45,7 +48,8 @@ export async function session(name, { video = true, storage } = {}) {
   const stamp = () => new Date(Date.now() - t0).toISOString().slice(14, 19);
 
   // Highlight a locator (optional), caption it, screenshot, then run the action.
-  async function step(caption, locator, action, { hold = 1400, shot = true } = {}) {
+  // Tutorial extras: `explain` (why, shown under the film) and `todo` (reader instruction in the PDF guide).
+  async function step(caption, locator, action, { hold = 1400, shot = true, explain, todo } = {}) {
     n += 1;
     let rect = null;
     if (locator) {
@@ -53,18 +57,21 @@ export async function session(name, { video = true, storage } = {}) {
       rect = await locator.first().boundingBox();
     }
     await page.evaluate(([r, c]) => window.__hl?.(r, c), [rect, `${n}. ${caption}`]).catch(() => {});
+    const at = stamp(), t = (Date.now() - t0) / 1000; // when the caption appears: the film cuts here
     await page.waitForTimeout(hold);
     const file = shot ? path.join('shots', name, `${String(n).padStart(2, '0')}.png`) : null;
     if (file) { fs.mkdirSync(path.join(ROOT, 'shots', name), { recursive: true }); await page.screenshot({ path: path.join(ROOT, file) }); }
-    log.push({ n, at: stamp(), caption, shot: file, section: sec });
+    log.push({ n, at, t, caption, shot: file, section: sec, explain, todo });
     if (action) await action(locator?.first());
     await page.evaluate(() => window.__hlClear?.()).catch(() => {});
   }
   // A check: caption the expected result, highlight where it shows, record pass/fail.
-  async function expect(caption, locator, { timeout = 20000, label } = {}) {
+  async function expect(caption, locator, { timeout = 20000, label, explain, todo } = {}) {
     let ok = true;
     try { await locator.first().waitFor({ state: 'visible', timeout }); } catch { ok = false; }
-    await step(`${label && ok ? label : ok ? 'PASS' : 'FAIL'} - ${caption}`, ok ? locator : null, null, { hold: 2000 });
+    if (TUTORIAL && !ok) throw new Error(`Tutorial check failed: ${caption}`);
+    const shown = TUTORIAL ? caption : `${label && ok ? label : ok ? 'PASS' : 'FAIL'} - ${caption}`;
+    await step(shown, ok ? locator : null, null, { hold: 2000, explain, todo });
     log[log.length - 1].result = label && ok ? label.toLowerCase() : ok ? 'pass' : 'fail';
     return ok;
   }

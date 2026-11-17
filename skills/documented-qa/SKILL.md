@@ -1,6 +1,6 @@
 ---
 name: documented-qa
-description: Record QA test cases from a QC/test sheet as evidence — Playwright runs with red-box highlights, numbered captions, PASS/FAIL checks, per-step screenshots and video, then a HyperFrames film (step list beside the recording), a PR with run logs, a results comment, a video upload and a handoff note. Use when the user asks for "documented testing", "documented QA", evidence videos of test cases, recording test-sheet cases on staging, re-running a documented case, or rebuilding the QA film.
+description: Two modes on one Playwright + HyperFrames recorder. (1) Evidence — record QA test cases from a QC/test sheet — Playwright runs with red-box highlights, numbered captions, PASS/FAIL checks, per-step screenshots and video, then a HyperFrames film (step list beside the recording), a PR with run logs, a results comment, a video upload and a handoff note. Use when the user asks for "documented testing", "documented QA", evidence videos of test cases, recording test-sheet cases on staging, re-running a documented case, or rebuilding the QA film. (2) Tutorial — a client/end-user walkthrough film plus a step-by-step PDF guide from the same recording (plain captions, explanation per step, no PASS/FAIL). Use when the user asks for a tutorial video, demo film, walkthrough, panduan / user guide video, "e2e tutorial", or rebuilding the demo film or PDF guide.
 ---
 
 # Documented QA
@@ -12,7 +12,13 @@ Templates (copy into the project, e.g. `internal/documented-testing/`):
 - `templates/lib.mjs` — recorder (`session`, `step`, `expect`, `close`).
 - `templates/example-login.mjs` — smallest example run.
 - `templates/example-todomvc.mjs` — runnable public-demo example with two `section()`s.
+- `templates/example-tutorial.mjs` — tutorial-mode example (`explain`, `todo`).
 - `templates/film/` — HyperFrames film builder (`build.mjs`).
+- `templates/guide.mjs` — PDF guide from the same run (tutorial mode).
+
+**Pick the mode first.** Evidence (default) proves a test sheet's cases for the team. Tutorial (`MODE=tutorial`
+on the recorder and film builder) teaches the flow to a client or user: read `references/tutorial.md`;
+its rules replace hard rules 0–2 and workflow steps 1, 3, 7 and 9 below.
 
 ## Hard rules
 
@@ -49,6 +55,7 @@ Env: `QA_APP_URL` (exported as `APP`), optional `QA_GATE_USER`/`QA_GATE_PW` for 
 - `section(name)` — call when the run moves to a different test case or step (e.g. `section('Case 3 · Checkout')`). Following steps log `section: name`; the film gives each section its own card and a fresh step list.
 - `step(caption, locator?, action?, {hold=1400, shot=true})` — red box + caption bar "N. caption", screenshot, log `{n, at:'mm:ss', caption, shot}`, then the action.
 - `expect(caption, locator, {timeout=20000, label})` — visible → `PASS - …`, else `FAIL - …` (or `label`, e.g. FOUND); sets `result`; returns bool.
+- Tutorial mode: `step`/`expect` also take `{ explain, todo }` — `explain` shows under the recording in the film, `todo` (HTML) is the reader instruction in the PDF. `expect` shows no PASS/FAIL and throws on failure: a tutorial never shows a broken flow.
 - `close()` — saves the video, writes `raw/<name>.json` `{name, raw, log}`. A run killed before `close()` has no log: rebuild it from screenshot mtimes.
 
 Add app-specific helpers (admin login, re-auth prompts) next to `session` in your copy.
